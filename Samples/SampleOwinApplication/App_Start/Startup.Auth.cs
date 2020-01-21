@@ -72,7 +72,7 @@ namespace SampleOwinApplication
             // It's enough to just create the federation and associate it
             // with the options. The federation will load the metadata and
             // update the options with any identity providers found.
-            new Federation("http://localhost:52071/Federation", true, Saml2Options);
+            new Federation("https://localhost:44300/Federation", true, Saml2Options);
 
             return Saml2Options;
         }
@@ -88,9 +88,9 @@ namespace SampleOwinApplication
 
             var spOptions = new SPOptions
             {
-                EntityId = new EntityId("http://localhost:57294/Saml2"),
-                ReturnUrl = new Uri("http://localhost:57294/Account/ExternalLoginCallback"),
-                DiscoveryServiceUrl = new Uri("http://localhost:52071/DiscoveryService"),
+                EntityId = new EntityId("https://localhost:44303/Saml2"),
+                ReturnUrl = new Uri("https://localhost:44303/Account/ExternalLoginCallback"),
+                DiscoveryServiceUrl = new Uri("https://localhost:44300/DiscoveryService"),
                 Organization = organization
             };
 

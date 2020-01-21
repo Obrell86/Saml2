@@ -1,8 +1,10 @@
-﻿using Sustainsys.Saml2.Metadata;
+﻿using Microsoft.IdentityModel.Tokens;
+using Sustainsys.Saml2.Metadata;
 using Sustainsys.Saml2.Saml2P;
 using Sustainsys.Saml2.WebSso;
 using System;
 using System.Collections.Generic;
+using System.Xml;
 
 namespace Sustainsys.Saml2.Configuration
 {
@@ -46,6 +48,14 @@ namespace Sustainsys.Saml2.Configuration
             SelectIdentityProvider
         { get; set; } = (ei, r) => null;
 
+        /// <summary>
+        /// Notification called to decide if a SameSite=None attribute should
+        /// be set for a cookie. The default implementation is based on the pseudo
+        /// code supplied by Google in https://www.chromium.org/updates/same-site/incompatible-clients
+        /// </summary>
+        public Func<string, bool> EmitSameSiteNone { get; set; }
+            = userAgent => SameSiteHelper.EmitSameSiteNone(userAgent);
+        
         /// <summary>
         /// Notification called when the logout command is about to use the 
         /// <code>StoredRequestState</code> derived from the request's RelayState data.
@@ -142,5 +152,23 @@ namespace Sustainsys.Saml2.Configuration
         /// </summary>
         public Func<EntityId, IDictionary<string, string>, IOptions, IdentityProvider> GetIdentityProvider { get; set; }
             = (ei, rd, opt) => opt.IdentityProviders[ei];
+
+        /// <summary>
+        /// Callbacks that allow modifying the validation behavior in potentially unsafe/insecure ways
+        /// </summary>
+        public UnsafeNotifications Unsafe { get; } = new UnsafeNotifications();
+
+        /// <summary>
+        /// Callbacks that allow modification of validation behavior in potentially unsafe/insecure ways
+        /// </summary>
+        public class UnsafeNotifications
+        {
+            /// <summary>
+            /// Notification called when the token handler has populated the
+            /// <see cref="TokenValidationParameters"/>. Modify it's properties to customize
+            /// the generated validation parameters.
+            /// </summary>
+            public Action<TokenValidationParameters, IdentityProvider, XmlElement> TokenValidationParametersCreated { get; set; } = (tvp, idp, xmlElement) => { };
+        }
     }
 }

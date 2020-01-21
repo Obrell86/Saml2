@@ -106,6 +106,95 @@ namespace Sustainsys.Saml2.Tests.Saml2P
         }
 
         [TestMethod]
+        public void Saml2Response_Read_ThrowsOnMissingId()
+        {
+            string responseText = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+                <saml2p:Response xmlns:saml2p=""urn:oasis:names:tc:SAML:2.0:protocol"" Version=""2.0""
+                 IssueInstant=""2013-01-01T00:00:00Z"" InResponseTo = ""InResponseToId"" Destination=""http://destination.example.com"">
+                    <saml2p:Status>
+                        <saml2p:StatusCode Value=""urn:oasis:names:tc:SAML:2.0:status:Requester"" />
+                        <saml2p:StatusMessage>Unable to encrypt assertion</saml2p:StatusMessage>
+                    </saml2p:Status>
+                </saml2p:Response>";
+
+            Action a = () => Saml2Response.Read( responseText );
+
+            a.Should().Throw<BadFormatSamlResponseException>()
+                .WithMessage( "Attribute 'ID' (case-sensitive) was not found or its value is empty" );
+        }
+
+        [TestMethod]
+        public void Saml2Response_Read_ThrowsOnEmptyId()
+        {
+            string responseText = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+                <saml2p:Response xmlns:saml2p=""urn:oasis:names:tc:SAML:2.0:protocol"" Version=""2.0"" ID="" ""
+                 IssueInstant=""2013-01-01T00:00:00Z"" Destination=""http://destination.example.com"">
+                    <saml2p:Status>
+                        <saml2p:StatusCode Value=""urn:oasis:names:tc:SAML:2.0:status:Requester"" />
+                        <saml2p:StatusMessage>Unable to encrypt assertion</saml2p:StatusMessage>
+                    </saml2p:Status>
+                </saml2p:Response>";
+
+            Action a = () => Saml2Response.Read( responseText );
+
+            a.Should().Throw<BadFormatSamlResponseException>()
+                .WithMessage( "Attribute 'ID' (case-sensitive) was not found or its value is empty" );
+        }
+
+        [TestMethod]
+        public void Saml2Response_Read_ThrowsOnMissingIssueInstant()
+        {
+            string responseText = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+                <saml2p:Response xmlns:saml2p=""urn:oasis:names:tc:SAML:2.0:protocol"" Version=""2.0"" ID=""_abc123""
+                 Destination=""http://destination.example.com"">
+                    <saml2p:Status>
+                        <saml2p:StatusCode Value=""urn:oasis:names:tc:SAML:2.0:status:Requester"" />
+                        <saml2p:StatusMessage>Unable to encrypt assertion</saml2p:StatusMessage>
+                    </saml2p:Status>
+                </saml2p:Response>";
+
+            Action a = () => Saml2Response.Read( responseText );
+
+            a.Should().Throw<BadFormatSamlResponseException>()
+                .WithMessage( "Attribute 'IssueInstant' (case-sensitive) was not found or its value is empty" );
+        }
+
+        [TestMethod]
+        public void Saml2Response_Read_ThrowsOnMissingStatus()
+        {
+            string responseText = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+                <saml2p:Response xmlns:saml2p=""urn:oasis:names:tc:SAML:2.0:protocol"" Version=""2.0"" ID=""_abc123""
+                 IssueInstant=""2013-01-01T00:00:00Z"" Destination=""http://destination.example.com"">
+                    <Flatus>
+                        <saml2p:StatusCode Value=""urn:oasis:names:tc:SAML:2.0:status:Requester"" />
+                        <saml2p:StatusMessage>Unable to encrypt assertion</saml2p:StatusMessage>
+                    </Flatus>
+                </saml2p:Response>";
+
+            Action a = () => Saml2Response.Read( responseText );
+
+            a.Should().Throw<BadFormatSamlResponseException>()
+                .WithMessage( "Element 'Status' (case-sensitive, namespace 'urn:oasis:names:tc:SAML:2.0:protocol') was not found" );
+        }
+
+        [TestMethod]
+        public void Saml2Response_Read_ThrowsOnMissingStatusCode()
+        {
+            string responseText = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+                <saml2p:Response xmlns:saml2p=""urn:oasis:names:tc:SAML:2.0:protocol"" Version=""2.0"" ID=""_abc123""
+                 IssueInstant=""2013-01-01T00:00:00Z"" Destination=""http://destination.example.com"">
+                    <saml2p:Status>
+                        <saml2p:StatusMessage>Unable to encrypt assertion</saml2p:StatusMessage>
+                    </saml2p:Status>
+                </saml2p:Response>";
+
+            Action a = () => Saml2Response.Read( responseText );
+
+            a.Should().Throw<BadFormatSamlResponseException>()
+                .WithMessage( "Element 'StatusCode' (case-sensitive, namespace 'urn:oasis:names:tc:SAML:2.0:protocol') was not found" );
+        }
+
+        [TestMethod]
         public void Saml2Response_Read_ThrowsOnMalformedDestination()
         {
             var response =
@@ -1406,15 +1495,13 @@ namespace Sustainsys.Saml2.Tests.Saml2P
             var subject = Saml2Response.Read(response);
 
             var options = StubFactory.CreateOptions();
-            //options.SPOptions.SystemIdentityModelIdentityConfiguration.AudienceRestriction.AudienceMode
-            //    = AudienceUriMode.Always;
 
             subject.Invoking(s => s.GetClaims(options))
                 .Should().Throw<SecurityTokenInvalidAudienceException>();
 		}
 
 		[TestMethod]
-        public void Saml2Response_GetClaims_IgnoresAudienceIfConfiguredWithNever()
+        public void Saml2Response_GetClaims_IgnoresAudienceUsingTVPNotificationFlag()
         {
             var response =
             @"<?xml version=""1.0"" encoding=""UTF-8""?>
@@ -1446,10 +1533,13 @@ namespace Sustainsys.Saml2.Tests.Saml2P
             var subject = Saml2Response.Read(response);
 
             var options = StubFactory.CreateOptions();
-            //options.SPOptions.SystemIdentityModelIdentityConfiguration
-            //    .AudienceRestriction.AudienceMode = AudienceUriMode.Never;
+            options.Notifications.Unsafe.TokenValidationParametersCreated = (tvp, idp, xml) =>
+            {
+                tvp.ValidateAudience = false;
 
-            Assert.Inconclusive();
+                idp.EntityId.Id.Should().Be("https://idp.example.com");
+                xml.OuterXml.Should().Contain("https://example.com/wrong/audience");
+            };
 
             subject.Invoking(s => s.GetClaims(options)).Should().NotThrow();
         }

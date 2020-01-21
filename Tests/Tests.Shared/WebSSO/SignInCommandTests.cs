@@ -79,14 +79,15 @@ namespace Sustainsys.Saml2.Tests.WebSso
             var httpRequest = new HttpRequestData("GET", new Uri($"http://localhost/signin?ReturnUrl={absoluteUri}"));
             var validateAbsoluteReturnUrlCalled = false;
 
-            Options.FromConfiguration.Notifications.ValidateAbsoluteReturnUrl =
+            var options = StubFactory.CreateOptions();
+            options.Notifications.ValidateAbsoluteReturnUrl =
                 (url) =>
                 {
                     validateAbsoluteReturnUrlCalled = true;
                     return true;
                 };
             
-            Action a = () => new SignInCommand().Run(httpRequest, Options.FromConfiguration);
+            Action a = () => new SignInCommand().Run(httpRequest, options);
 
             a.Should().NotThrow<InvalidOperationException>("the ValidateAbsoluteReturnUrl notification returns true");
             validateAbsoluteReturnUrlCalled.Should().BeTrue("the ValidateAbsoluteReturnUrl notification should have been called");
@@ -100,14 +101,15 @@ namespace Sustainsys.Saml2.Tests.WebSso
             var httpRequest = new HttpRequestData("GET", new Uri($"http://localhost/signin?ReturnUrl={relativeUri}"));
             var validateAbsoluteReturnUrlCalled = false;
 
-            Options.FromConfiguration.Notifications.ValidateAbsoluteReturnUrl =
+            var options = StubFactory.CreateOptions();
+            options.Notifications.ValidateAbsoluteReturnUrl =
                 (url) =>
                 {
                     validateAbsoluteReturnUrlCalled = true;
                     return true;
                 };
 
-            Action a = () => new SignInCommand().Run(httpRequest, Options.FromConfiguration);
+            Action a = () => new SignInCommand().Run(httpRequest, options);
 
             a.Should().NotThrow<InvalidOperationException>("the ReturnUrl is relative");
             validateAbsoluteReturnUrlCalled.Should().BeFalse("the ValidateAbsoluteReturnUrl notification should not have been called");
@@ -165,20 +167,21 @@ namespace Sustainsys.Saml2.Tests.WebSso
                     EntityId = new EntityId("https://github.com/SustainsysIT/Saml2")
                 });
 
-            var request = new HttpRequestData("GET", new Uri("http://localhost/signin?ReturnUrl=%2FReturn%2FPath"));
+            var request = new HttpRequestData("GET", new Uri("https://localhost/signin?ReturnUrl=%2FReturn%2FPath"));
 
             var result = new SignInCommand().Run(request, options);
 
             result.HttpStatusCode.Should().Be(HttpStatusCode.SeeOther);
 
             result.SetCookieName.Should().StartWith(StoredRequestState.CookieNameBase);
+            result.SetCookieSecureFlag.Should().BeTrue();
 
             var relayState = result.SetCookieName.Substring(StoredRequestState.CookieNameBase.Length);
 
             var queryString = string.Format("?entityID={0}&return={1}&returnIDParam=idp",
                 Uri.EscapeDataString(options.SPOptions.EntityId.Id),
                 Uri.EscapeDataString(
-                    "http://localhost/Saml2/SignIn?RelayState=" + relayState));
+                    "https://localhost/Saml2/SignIn?RelayState=" + relayState));
 
             var expectedLocation = new Uri(dsUrl + queryString);
 
@@ -409,6 +412,42 @@ namespace Sustainsys.Saml2.Tests.WebSso
             Action a = () => SignInCommand.Run(null, null, request, options, null);
 
             a.Should().NotThrow();
+        }
+
+        [TestMethod]
+        public void SignInCommand_WithHttpUrl_DoesNotSetSecureCookieFlag()
+        {
+            var options = StubFactory.CreateOptions();
+            var httpRequest = new HttpRequestData("GET", new Uri("http://localhost"));
+
+            var actual = SignInCommand.Run(options.IdentityProviders.Default.EntityId, null, httpRequest, options, null);
+
+            actual.SetCookieName.Should().StartWith(StoredRequestState.CookieNameBase);
+            actual.SetCookieSecureFlag.Should().BeFalse();
+        }
+
+        [TestMethod]
+        public void SignInCommand_WithHttpsUrl_SetsSecureCookieFlag()
+        {
+            var options = StubFactory.CreateOptions();
+            var httpRequest = new HttpRequestData("GET", new Uri("https://localhost"));
+
+            var actual = SignInCommand.Run(options.IdentityProviders.Default.EntityId, null, httpRequest, options, null);
+
+            actual.SetCookieName.Should().StartWith(StoredRequestState.CookieNameBase);
+            actual.SetCookieSecureFlag.Should().BeTrue();
+        }
+
+        [TestMethod]
+        public void SignInCommand_WithHttpsPublicOrigin_SetsSecureCookieFlag()
+        {
+            var options = StubFactory.CreateOptionsPublicOrigin(new Uri("https://my.public.origin:8443"));
+            var httpRequest = new HttpRequestData("GET", new Uri("http://localhost"));
+
+            var actual = SignInCommand.Run(options.IdentityProviders.Default.EntityId, null, httpRequest, options, null);
+
+            actual.SetCookieName.Should().StartWith(StoredRequestState.CookieNameBase);
+            actual.SetCookieSecureFlag.Should().BeTrue();
         }
     }
 }
