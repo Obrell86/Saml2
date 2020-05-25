@@ -14,7 +14,7 @@ using System.Reflection;
 using Sustainsys.Saml2.Tests.Helpers;
 using Sustainsys.Saml2.TestHelpers;
 
-namespace Sustainsys.Saml2.Tests.WebSSO
+namespace Sustainsys.Saml2.Tests.WebSso
 {
     [TestClass]
     public class Saml2ArtifactBindingTests
@@ -75,7 +75,8 @@ namespace Sustainsys.Saml2.Tests.WebSSO
 
             result.Should().BeEquivalentTo(expected);
             StubServer.LastArtifactResolutionSoapActionHeader.Should().Be(
-                "http://www.oasis-open.org/committees/security");
+                "\"http://www.oasis-open.org/committees/security\"");
+            StubServer.LastArtifactResolutionContentType.Should().Be("text/xml; charset=\"utf-8\"");
             StubServer.LastArtifactResolutionWasSigned.Should().BeFalse();
         }
 
@@ -138,8 +139,6 @@ namespace Sustainsys.Saml2.Tests.WebSSO
                 null,
                 new StoredRequestState(issuer, null, null, null));
 
-            StubServer.LastArtifactResolutionSoapActionHeader = null;
-
             var result = Saml2Binding.Get(Saml2BindingType.Artifact).Unbind(r, StubFactory.CreateOptions());
 
             var xmlDocument = XmlHelpers.XmlDocumentFromString(
@@ -148,8 +147,6 @@ namespace Sustainsys.Saml2.Tests.WebSSO
             var expected = new UnbindResult(xmlDocument.DocumentElement, relayState, TrustLevel.None);
 
             result.Should().BeEquivalentTo(expected);
-            StubServer.LastArtifactResolutionSoapActionHeader.Should().Be(
-                "http://www.oasis-open.org/committees/security");
             StubServer.LastArtifactResolutionWasSigned.Should().BeFalse();
         }
 
@@ -171,7 +168,7 @@ namespace Sustainsys.Saml2.Tests.WebSSO
                 Certificate = SignedXmlHelper.TestCert
             });
 
-            var result = Saml2Binding.Get(Saml2BindingType.Artifact).Unbind(r, options);
+            Saml2Binding.Get(Saml2BindingType.Artifact).Unbind(r, options);
 
             StubServer.LastArtifactResolutionWasSigned.Should().BeTrue();
         }
@@ -198,8 +195,6 @@ namespace Sustainsys.Saml2.Tests.WebSSO
             var expected = new UnbindResult(xmlDocument.DocumentElement, null, TrustLevel.None);
 
             result.Should().BeEquivalentTo(expected);
-            StubServer.LastArtifactResolutionSoapActionHeader.Should().Be(
-                "http://www.oasis-open.org/committees/security");
         }
 
         [TestMethod]
@@ -232,8 +227,6 @@ namespace Sustainsys.Saml2.Tests.WebSSO
             var expected = new UnbindResult(xmlDocument.DocumentElement, relayState, TrustLevel.None);
 
             result.Should().BeEquivalentTo(expected);
-            StubServer.LastArtifactResolutionSoapActionHeader.Should().Be(
-                "http://www.oasis-open.org/committees/security");
         }
 
         [TestMethod]
@@ -264,8 +257,6 @@ namespace Sustainsys.Saml2.Tests.WebSSO
             var expected = new UnbindResult(xmlDocument.DocumentElement, null, TrustLevel.None);
 
             result.Should().BeEquivalentTo(expected);
-            StubServer.LastArtifactResolutionSoapActionHeader.Should().Be(
-                "http://www.oasis-open.org/committees/security");
         }
 
         [TestMethod]
@@ -308,8 +299,7 @@ namespace Sustainsys.Saml2.Tests.WebSSO
             var artifact = Convert.FromBase64String(
                 Uri.UnescapeDataString(query["SAMLart"]));
 
-            ISaml2Message storedMessage;
-            Saml2ArtifactBinding.PendingMessages.TryRemove(artifact, out storedMessage)
+            Saml2ArtifactBinding.PendingMessages.TryRemove(artifact, out ISaml2Message storedMessage)
                 .Should().BeTrue();
 
             storedMessage.Should().BeSameAs(message);

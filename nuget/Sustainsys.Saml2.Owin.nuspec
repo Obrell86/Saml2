@@ -6,14 +6,15 @@
     <title>$title$</title>
     <authors>$author$</authors>
     <owners>$author$</owners>
-    <licenseUrl>https://github.com/Sustainsys/Saml2/blob/master/LICENSE</licenseUrl>
+    <license type="expression">MIT</license>
+    <icon>Sustainsys.png</icon>
     <projectUrl>https://github.com/Sustainsys/Saml2</projectUrl>
     <iconUrl>https://raw.github.com/Sustainsys/Saml2/master/nuget/Sustainsys.png</iconUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>
       A SAML2 Owin middleware, compatible with ASP.NET Identity for external logins.
     </description>
-    <copyright>Copyright Sustainsys and contributors 2015-2018</copyright>
+    <copyright>Copyright Sustainsys and contributors 2015-2020</copyright>
     <tags>SAML2 authentication AspNet SAML SSO Owin</tags>
     <releaseNotes />
     <dependencies>
@@ -22,4 +23,7 @@
       </group>
     </dependencies>
   </metadata>
+  <files>
+    <file src="..\nuget\sustainsys.png" target="\" />
+  </files>
 </package>

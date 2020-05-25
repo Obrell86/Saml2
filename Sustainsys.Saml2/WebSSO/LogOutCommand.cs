@@ -10,6 +10,7 @@ using System.Linq;
 using System.Security.Cryptography.Xml;
 using Sustainsys.Saml2.Internal;
 using Sustainsys.Saml2.Metadata;
+using Sustainsys.Saml2.Metadata.Exceptions;
 
 namespace Sustainsys.Saml2.WebSso
 {
@@ -83,13 +84,17 @@ namespace Sustainsys.Saml2.WebSso
                 var unbindResult = binding.Unbind(request, options);
                 options.Notifications.MessageUnbound(unbindResult);
 
-                VerifyMessageIsSigned(unbindResult, options);
                 switch (unbindResult.Data.LocalName)
                 {
                     case "LogoutRequest":
-                        commandResult = HandleRequest(unbindResult, options);
+                        VerifyMessageIsSigned(unbindResult, options);
+                        commandResult = HandleRequest(unbindResult, request, options);
                         break;
                     case "LogoutResponse":
+                        if (!options.SPOptions.Compatibility.AcceptUnsignedLogoutResponses)
+                        {
+                            VerifyMessageIsSigned(unbindResult, options);
+                        }
                         var storedRequestState = options.Notifications.GetLogoutResponseState(request);
                         var urls = new Saml2Urls(request, options);
                         commandResult = HandleResponse(unbindResult, storedRequestState, options, returnUrl, urls);
@@ -165,8 +170,7 @@ namespace Sustainsys.Saml2.WebSso
                 sessionIndexClaim = request.User.FindFirst(Saml2ClaimTypes.SessionIndex);
             }
 
-            IdentityProvider idp;
-            var knownIdp = options.IdentityProviders.TryGetValue(new EntityId(idpEntityId), out idp);
+            var knownIdp = options.IdentityProviders.TryGetValue(new EntityId(idpEntityId), out IdentityProvider idp);
 
             options.SPOptions.Logger.WriteVerbose("Initiating logout, checking requirements for federated logout"
                 + "\n  Issuer of LogoutNameIdentifier claim (should be Idp entity id): " + idpEntityId
@@ -186,8 +190,10 @@ namespace Sustainsys.Saml2.WebSso
             {
                 var logoutRequest = idp.CreateLogoutRequest(request.User);
 
+                options.Notifications.LogoutRequestCreated(logoutRequest, request.User, idp);
+
                 commandResult = Saml2Binding.Get(idp.SingleLogoutServiceBinding)
-                    .Bind(logoutRequest);
+                    .Bind(logoutRequest, options.SPOptions.Logger, options.Notifications.LogoutRequestXmlCreated);
 
                 commandResult.RelayState = logoutRequest.RelayState;
                 commandResult.RequestState = new StoredRequestState(
@@ -240,7 +246,7 @@ namespace Sustainsys.Saml2.WebSso
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Naming", "CA2204:Literals should be spelled correctly", MessageId = "SingleLogoutServiceUrl")]
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Naming", "CA2204:Literals should be spelled correctly", MessageId = "SingleLogoutService")]
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Naming", "CA2204:Literals should be spelled correctly", MessageId = "LogoutRequest")]
-        private static CommandResult HandleRequest(UnbindResult unbindResult, IOptions options)
+        private static CommandResult HandleRequest(UnbindResult unbindResult, HttpRequestData httpRequest, IOptions options)
         {
             var request = Saml2LogoutRequest.FromXml(unbindResult.Data);
 
@@ -274,10 +280,13 @@ namespace Sustainsys.Saml2.WebSso
                 RelayState = unbindResult.RelayState
             };
 
+            options.Notifications.LogoutResponseCreated(response, request, httpRequest.User, idp);
+
             options.SPOptions.Logger.WriteInformation("Got a logout request " + request.Id
                 + ", responding with logout response " + response.Id);
 
-            var result = Saml2Binding.Get(idp.SingleLogoutServiceBinding).Bind(response);
+            var result = Saml2Binding.Get(idp.SingleLogoutServiceBinding).Bind(
+                response, options.SPOptions.Logger, options.Notifications.LogoutResponseXmlCreated);
             result.TerminateLocalSession = true;
             return result;
         }

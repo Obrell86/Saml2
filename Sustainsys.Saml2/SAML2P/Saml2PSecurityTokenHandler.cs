@@ -1,6 +1,7 @@
 ﻿using Microsoft.IdentityModel.Tokens;
 using Microsoft.IdentityModel.Tokens.Saml2;
 using Sustainsys.Saml2.Configuration;
+using Sustainsys.Saml2.Exceptions;
 using Sustainsys.Saml2.Internal;
 using Sustainsys.Saml2.Tokens;
 using System;
@@ -26,19 +27,6 @@ namespace Sustainsys.Saml2.Saml2P
 		public Saml2PSecurityTokenHandler(SPOptions spOptions)
 		{
 			Serializer = new Saml2PSerializer(spOptions);
-		}
-
-		// Overridden to fix the fact that the base class version uses NotBefore as the token replay expiry time
-		// Due to the fact that we can't override the ValidateToken function (it's overridden in the base class!)
-		// we have to parse the token again.
-		// This can be removed when:
-		// https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet/issues/898
-		// is fixed.
-		protected override void ValidateTokenReplay(DateTime? expirationTime, string securityToken, TokenValidationParameters validationParameters)
-		{
-			var saml2Token = ReadSaml2Token(securityToken);
-			base.ValidateTokenReplay(saml2Token.Assertion.Conditions.NotOnOrAfter,
-				securityToken, validationParameters);
 		}
 
 		// TODO: needed with Microsoft.identitymodel?
@@ -84,10 +72,48 @@ namespace Sustainsys.Saml2.Saml2P
             }
         }
 
-		protected override Saml2SecurityToken ValidateSignature(string token, TokenValidationParameters validationParameters)
+		// Override and build our own logic. The problem is ValidateTokenReplay that serializes the token back. And that
+		// breaks because it expects some optional values to be present.
+		public override ClaimsPrincipal ValidateToken(string token, TokenValidationParameters validationParameters, out Microsoft.IdentityModel.Tokens.SecurityToken validatedToken)
 		{
-			// Just skip signature validation -- we do this elsewhere
-			return ReadSaml2Token(token);
+			var samlToken = ReadSaml2Token(token);
+
+			ValidateConditions(samlToken, validationParameters);
+			ValidateSubject(samlToken, validationParameters);
+
+			var issuer = ValidateIssuer(samlToken.Issuer, samlToken, validationParameters);
+
+			// Just using the assertion id for token replay. As that is part of the signed value it cannot
+			// be altered by someone replaying the token.
+			ValidateTokenReplay(samlToken.Assertion.Conditions.NotOnOrAfter, samlToken.Assertion.Id.Value, validationParameters);
+
+			// ValidateIssuerSecurityKey not called - we have our own signature validation.
+
+			validatedToken = samlToken;
+			var identity = CreateClaimsIdentity(samlToken, issuer, validationParameters);
+
+			if(validationParameters.SaveSigninToken)
+			{
+				identity.BootstrapContext = samlToken;
+			}
+
+			return new ClaimsPrincipal(identity);
 		}
-    }
+		private static readonly Uri bearerUri = new Uri("urn:oasis:names:tc:SAML:2.0:cm:bearer");
+
+		protected override void ValidateSubject(Saml2SecurityToken samlToken, TokenValidationParameters validationParameters)
+		{
+			base.ValidateSubject(samlToken, validationParameters);
+
+			if(!samlToken.Assertion.Subject.SubjectConfirmations.Any())
+			{
+				throw new Saml2ResponseFailedValidationException("No subject confirmation method found.");
+			}
+
+			if(!samlToken.Assertion.Subject.SubjectConfirmations.Any(sc => sc.Method == bearerUri))
+			{
+				throw new Saml2ResponseFailedValidationException("Only assertions with subject confirmation method \"bearer\" are supported.");
+			}
+		}
+	}
 }

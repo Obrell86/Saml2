@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -38,7 +39,7 @@ namespace Sustainsys.Saml2.Saml2P
         /// </summary>
         /// <returns>XElement</returns>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Globalization", "CA1308:NormalizeStringsToUppercase", Justification = "Lowercase demanded by specification.")]
-        public XElement ToXElement()
+        public override XElement ToXElement()
         {
             var x = new XElement(Saml2Namespaces.Saml2P + LocalName);
 
@@ -52,6 +53,10 @@ namespace Sustainsys.Saml2.Saml2P
             if (ForceAuthentication)
             {
                 x.Add(new XAttribute("ForceAuthn", ForceAuthentication));
+            }
+            if (IsPassive)
+            {
+                x.Add(new XAttribute("IsPassive", IsPassive));
             }
 
             AddNameIdPolicy(x);
@@ -111,7 +116,7 @@ namespace Sustainsys.Saml2.Saml2P
         }
 
         /// <summary>
-        /// Serializes the message into wellformed Xml.
+        /// Serializes the message into wellformed Xml
         /// </summary>
         /// <returns>string containing the Xml data.</returns>
         public override string ToXml()
@@ -158,7 +163,13 @@ namespace Sustainsys.Saml2.Saml2P
             var forceAuthnString = xml.Attributes["ForceAuthn"].GetValueIfNotNull();
             if (forceAuthnString != null)
             {
-                ForceAuthentication = bool.Parse(forceAuthnString);
+                ForceAuthentication = XmlConvert.ToBoolean(forceAuthnString);
+            }
+
+            var isPassiveString = xml.Attributes["IsPassive"].GetValueIfNotNull();
+            if (isPassiveString != null)
+            {
+                IsPassive = XmlConvert.ToBoolean(isPassiveString);
             }
 
             var node = xml["NameIDPolicy", Saml2Namespaces.Saml2PName];
@@ -176,7 +187,7 @@ namespace Sustainsys.Saml2.Saml2P
                 var allowCreateStr = node.Attributes["AllowCreate"].GetValueIfNotNull();
                 if (allowCreateStr != null)
                 {
-                    allowCreate = bool.Parse(allowCreateStr);
+                    allowCreate = XmlConvert.ToBoolean(allowCreateStr);
                 }
 
                 NameIdPolicy = new Saml2NameIdPolicy(allowCreate, nameIdFormat);
@@ -220,5 +231,12 @@ namespace Sustainsys.Saml2.Saml2P
         /// If true, the request is sent with ForceAuthn="true".
         /// </summary>
         public bool ForceAuthentication { get; set; } = false;
+
+        /// <summary>
+        /// Sets whether request should request for SAML Passive login if possible, 
+        /// If false, the IsPassive parameter is omitted from the request.
+        /// If true, the request is sent with IsPassive="true".
+        /// </summary>
+        public bool IsPassive { get; set; } = false;
     }
 }

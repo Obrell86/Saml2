@@ -1,16 +1,9 @@
-﻿#if NETCOREAPP2_1
-using Microsoft.AspNetCore;
+﻿using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-#else
-using Owin;
-using Microsoft.Owin;
-using Microsoft.Owin.Hosting;
-using HttpContext = Microsoft.Owin.IOwinContext;
-#endif
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Collections.Generic;
@@ -25,16 +18,12 @@ namespace Sustainsys.Saml2.Tests.Helpers
 {
     public class StubServer
     {
-#if NETCOREAPP2_1
 		private static IWebHost host;
-#else
-        private static IDisposable host;
-#endif
         static IDictionary<string, string> GetContent()
         {
-            var content = new Dictionary<string, string>();
-
-            content["/idpMetadata"] = string.Format(
+            var content = new Dictionary<string, string>
+            {
+                ["/idpMetadata"] = string.Format(
  @"<EntityDescriptor xmlns=""urn:oasis:names:tc:SAML:2.0:metadata""
     entityID=""http://localhost:13428/idpMetadata"" validUntil=""2100-01-02T14:42:43Z"">
     <IDPSSODescriptor
@@ -57,9 +46,9 @@ namespace Sustainsys.Saml2.Tests.Helpers
         ResponseLocation=""http://localhost:{1}/logoutResponse""/>
     </IDPSSODescriptor>
   </EntityDescriptor>
-", SignedXmlHelper.KeyInfoXml, IdpMetadataSsoPort);
+", SignedXmlHelper.KeyInfoXml, IdpMetadataSsoPort),
 
-            content["/idpMetadataNoCertificate"] =
+                ["/idpMetadataNoCertificate"] =
 @"<EntityDescriptor xmlns=""urn:oasis:names:tc:SAML:2.0:metadata""
     entityID=""http://localhost:13428/idpMetadataNoCertificate"" cacheDuration=""PT15M"">
     <IDPSSODescriptor
@@ -71,9 +60,9 @@ namespace Sustainsys.Saml2.Tests.Helpers
         Binding=""urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect""
         Location=""http://localhost:13428/logout""/>
     </IDPSSODescriptor>
-  </EntityDescriptor>";
+  </EntityDescriptor>",
 
-            content["/idpMetadataOtherEntityId"] = string.Format(
+                ["/idpMetadataOtherEntityId"] = string.Format(
 @"<EntityDescriptor xmlns=""urn:oasis:names:tc:SAML:2.0:metadata""
     entityID=""http://other.entityid.example.com"">
     <IDPSSODescriptor
@@ -86,9 +75,9 @@ namespace Sustainsys.Saml2.Tests.Helpers
         Binding=""urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect""
         Location=""http://wrong.entityid.example.com/acs""/>
     </IDPSSODescriptor>
-  </EntityDescriptor>", SignedXmlHelper.KeyInfoXml);
+  </EntityDescriptor>", SignedXmlHelper.KeyInfoXml),
 
-            content["/federationMetadata"] = string.Format(
+                ["/federationMetadata"] = string.Format(
 @"<EntitiesDescriptor xmlns=""urn:oasis:names:tc:SAML:2.0:metadata"" validUntil=""2100-01-01T14:43:15Z"">
   <EntityDescriptor entityID=""http://idp.federation.example.com/metadata"">
     <IDPSSODescriptor
@@ -110,7 +99,8 @@ namespace Sustainsys.Saml2.Tests.Helpers
     </SPSSODescriptor>
   </EntityDescriptor>
 </EntitiesDescriptor>
-", SignedXmlHelper.KeyInfoXml);
+", SignedXmlHelper.KeyInfoXml)
+            };
 
             var federationMetadataSigned = string.Format(
 @"<EntitiesDescriptor ID=""federationMetadataSigned"" xmlns=""urn:oasis:names:tc:SAML:2.0:metadata"" validUntil=""2100-01-01T14:43:15Z"">
@@ -366,8 +356,6 @@ entityID=""http://localhost:13428/idpMetadataVeryShortCacheDuration"" cacheDurat
 
 		static async Task HandleRequestAsync(HttpContext ctx, Func<Task> next)
 		{
-			string data;
-
 			switch (ctx.Request.Path.ToString())
 			{
 				case "/ars":
@@ -375,7 +363,7 @@ entityID=""http://localhost:13428/idpMetadataVeryShortCacheDuration"" cacheDurat
 					return;
 				default:
 					var content = GetContent();
-					if (content.TryGetValue(ctx.Request.Path.ToString(), out data))
+					if (content.TryGetValue(ctx.Request.Path.ToString(), out string data))
 					{
 						await ctx.Response.WriteAsync(data);
 						return;
@@ -385,8 +373,7 @@ entityID=""http://localhost:13428/idpMetadataVeryShortCacheDuration"" cacheDurat
 			await next.Invoke();
 		}
 
-#if NETCOREAPP2_1
-		public static void Start(TestContext testContext)
+		public static void Start()
         {
 			host = new WebHostBuilder()
 				.UseUrls("http://localhost:13428")
@@ -395,19 +382,11 @@ entityID=""http://localhost:13428/idpMetadataVeryShortCacheDuration"" cacheDurat
 				.Build();
 			host.Start();
         }
-#else
-		public static void Start(TestContext testContext)
-		{
-			host = WebApp.Start("http://localhost:13428", app =>
-			{
-				app.Use(HandleRequestAsync);
-			});
-		}
-#endif
 
 		private static async Task ArtifactResolutionService(HttpContext ctx)
         {
             LastArtifactResolutionSoapActionHeader = ctx.Request.Headers["SOAPAction"];
+            LastArtifactResolutionContentType = ctx.Request.Headers["Content-Type"];
 
             using (var reader = new StreamReader(ctx.Request.Body))
             {
@@ -451,6 +430,8 @@ entityID=""http://localhost:13428/idpMetadataVeryShortCacheDuration"" cacheDurat
         }
 
         public static string LastArtifactResolutionSoapActionHeader { get; set; }
+
+        public static string LastArtifactResolutionContentType { get; set; }
 
         public static bool LastArtifactResolutionWasSigned { get; set; }
 

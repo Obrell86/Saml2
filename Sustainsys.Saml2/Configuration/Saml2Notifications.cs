@@ -4,7 +4,10 @@ using Sustainsys.Saml2.Saml2P;
 using Sustainsys.Saml2.WebSso;
 using System;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Xml;
+using System.Xml.Linq;
+using Sustainsys.Saml2.Metadata.Descriptors;
 
 namespace Sustainsys.Saml2.Configuration
 {
@@ -23,6 +26,10 @@ namespace Sustainsys.Saml2.Configuration
         public Action<Saml2AuthenticationRequest, IdentityProvider, IDictionary<string, string>>
             AuthenticationRequestCreated
         { get; set; } = (request, provider, dictionary) => { };
+
+        public Action<Saml2AuthenticationRequest, XDocument, Saml2BindingType>
+            AuthenticationRequestXmlCreated
+        { get; set; } = (request, xDocument, Saml2BindingType) => { };
 
         /// <summary>
         /// Notification called when the SignIn command has produced a
@@ -51,7 +58,10 @@ namespace Sustainsys.Saml2.Configuration
         /// <summary>
         /// Notification called to decide if a SameSite=None attribute should
         /// be set for a cookie. The default implementation is based on the pseudo
-        /// code supplied by Google in https://www.chromium.org/updates/same-site/incompatible-clients
+        /// code in https://devblogs.microsoft.com/aspnet/upcoming-samesite-cookie-changes-in-asp-net-and-asp-net-core/
+        /// More covering code can be found at 
+        /// https://www.chromium.org/updates/same-site/incompatible-clients but that cannot
+        /// be shipped with the library due to the license.
         /// </summary>
         public Func<string, bool> EmitSameSiteNone { get; set; }
             = userAgent => SameSiteHelper.EmitSameSiteNone(userAgent);
@@ -121,6 +131,25 @@ namespace Sustainsys.Saml2.Configuration
         public Action<CommandResult> LogoutCommandResultCreated { get; set; } = cr => { };
 
         /// <summary>
+        /// Notification called when a logout request is created to initiate single log
+        /// out with an identity provider.
+        /// </summary>
+        public Action<Saml2LogoutRequest, ClaimsPrincipal, IdentityProvider> LogoutRequestCreated { get; set; } = (lr, user, idp) => { };
+
+        /// <summary>
+        /// Notification called when a logout request has been transformed to an XML node tree.
+        /// </summary>
+        public Action<Saml2LogoutRequest, XDocument, Saml2BindingType> LogoutRequestXmlCreated { get; set; } = (lr, xd, bt) => { };
+
+        /// <summary>
+        /// Notification called when a logout request has been received and processed and a Logout Response has been created.
+        /// </summary>
+        public Action<Saml2LogoutResponse, Saml2LogoutRequest, ClaimsPrincipal, IdentityProvider> LogoutResponseCreated { get; set; } 
+            = (resp, req, u, idp) => { };
+
+        public Action<Saml2LogoutResponse, XDocument, Saml2BindingType> LogoutResponseXmlCreated { get; set; } = (lr, xd, bt) => { };
+
+        /// <summary>
         /// Notification called when metadata has been created, but before
         /// signing. At this point the contents of the metadata can be
         /// altered before presented.
@@ -169,6 +198,16 @@ namespace Sustainsys.Saml2.Configuration
             /// the generated validation parameters.
             /// </summary>
             public Action<TokenValidationParameters, IdentityProvider, XmlElement> TokenValidationParametersCreated { get; set; } = (tvp, idp, xmlElement) => { };
+
+            /// <summary>
+            /// Notification called when an incoming Saml Response contains an unexpected
+            /// InResponseTo value. Return true to acceppt the message despite this.
+            /// </summary>
+            /// <remarks>This notification has been added to aid in troubleshooting a
+            /// hard-to-track-down issue. It will be removed in a future release if a 
+            /// better solution is identified thanks to the added production analysis
+            /// that this enables.</remarks>
+            public Func<Saml2Response, IEnumerable<ClaimsIdentity>, bool> IgnoreUnexpectedInResponseTo { get; set; } = (r, ci) => false;
         }
     }
 }

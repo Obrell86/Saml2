@@ -54,12 +54,8 @@ namespace Sustainsys.Saml2.AspNetCore2
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Maintainability", "CA1500:VariableNamesShouldNotMatchFieldNames", MessageId = "context")]
         public Task InitializeAsync(AuthenticationScheme scheme, HttpContext context)
         {
-            if(context == null)
-            {
-                throw new ArgumentNullException(nameof(context));
-            }
+            this.context = context ?? throw new ArgumentNullException(nameof(context));
 
-            this.context = context;
             options = optionsCache.GetOrAdd(scheme.Name, () => optionsFactory.Create(scheme.Name));
 
             emitSameSiteNone = options.Notifications.EmitSameSiteNone(context.Request.GetUserAgent());
@@ -92,7 +88,7 @@ namespace Sustainsys.Saml2.AspNetCore2
             var redirectUri = properties.RedirectUri ?? CurrentUri;
             properties.RedirectUri = null;
 
-            var requestData = context.ToHttpRequestData(null);
+            var requestData = context.ToHttpRequestData(options.CookieManager, null);
 
             EntityId entityId = null;
 
@@ -108,7 +104,7 @@ namespace Sustainsys.Saml2.AspNetCore2
                 options,
                 properties.Items);
 
-            await result.Apply(context, dataProtector, null, null, emitSameSiteNone);
+            await result.Apply(context, dataProtector, options.CookieManager, null, null, emitSameSiteNone);
         }
 
         /// <InheritDoc />
@@ -127,10 +123,10 @@ namespace Sustainsys.Saml2.AspNetCore2
                     options.SPOptions.ModulePath.Length).TrimStart('/');
 
                 var commandResult = CommandFactory.GetCommand(commandName).Run(
-                    context.ToHttpRequestData(dataProtector.Unprotect), options);
+                    context.ToHttpRequestData(options.CookieManager, dataProtector.Unprotect), options);
 
                 await commandResult.Apply(
-                    context, dataProtector, options.SignInScheme, options.SignOutScheme, emitSameSiteNone);
+                    context, dataProtector, options.CookieManager, options.SignInScheme, options.SignOutScheme, emitSameSiteNone);
 
                 return true;
             }
@@ -151,13 +147,13 @@ namespace Sustainsys.Saml2.AspNetCore2
             }
 
             await LogoutCommand.InitiateLogout(
-                context.ToHttpRequestData(dataProtector.Unprotect),
+                context.ToHttpRequestData(options.CookieManager, dataProtector.Unprotect),
                 new Uri(properties.RedirectUri, UriKind.RelativeOrAbsolute),
                 options,
                 // In the Asp.Net Core2 model, it's the caller's responsibility to terminate the
                 // local session on an SP-initiated logout.
                 terminateLocalSession: false)
-                .Apply(context, dataProtector, null, null, emitSameSiteNone);
+                .Apply(context, dataProtector, options.CookieManager, null, null, emitSameSiteNone);
         }
     }
 }

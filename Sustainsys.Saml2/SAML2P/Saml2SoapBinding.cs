@@ -90,7 +90,10 @@ namespace Sustainsys.Saml2.Saml2P
 
             using (var client = new ClientCertificateWebClient(clientCertificates))
             {
-                client.Headers.Add("SOAPAction", "http://www.oasis-open.org/committees/security");
+                client.Headers.Add("SOAPAction", "\"http://www.oasis-open.org/committees/security\"");
+                client.Encoding = Encoding.UTF8;
+                client.Headers.Add(HttpRequestHeader.ContentType, "text/xml; charset=\"utf-8\"");
+
                 var response = client.UploadString(destination, message);
 
                 return ExtractBody(response);

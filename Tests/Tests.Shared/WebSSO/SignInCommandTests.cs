@@ -8,6 +8,7 @@ using Sustainsys.Saml2.Metadata;
 using Sustainsys.Saml2.WebSso;
 using System.Collections.Generic;
 using Sustainsys.Saml2.TestHelpers;
+using Sustainsys.Saml2.Saml2P;
 
 namespace Sustainsys.Saml2.Tests.WebSso
 {
@@ -38,8 +39,6 @@ namespace Sustainsys.Saml2.Tests.WebSso
         [TestMethod]
         public void SignInCommand_Run_MapsReturnUrl()
         {
-            var defaultDestination = Options.FromConfiguration.IdentityProviders.Default.SingleSignOnServiceUrl;
-
             var httpRequest = new HttpRequestData("GET", new Uri("http://localhost/signin?ReturnUrl=%2FReturn.aspx"));
 
             var actual = new SignInCommand().Run(httpRequest, Options.FromConfiguration);
@@ -232,14 +231,14 @@ namespace Sustainsys.Saml2.Tests.WebSso
                 selectedIdpCalled = true;
                 return null;
             };
-            
-            var authnRequestCreatedCalled = false;
+
+            Saml2AuthenticationRequest saml2AuthenticationRequest = null;
             options.Notifications.AuthenticationRequestCreated = (a, i, r) => 
                 {
                     a.Should().NotBeNull();
                     i.Should().BeSameAs(idp);
                     r.Should().BeSameAs(relayData);
-                    authnRequestCreatedCalled = true;
+                    saml2AuthenticationRequest = a;
                 };
 
             CommandResult notifiedCommandResult = null;
@@ -249,11 +248,20 @@ namespace Sustainsys.Saml2.Tests.WebSso
                     r.Should().BeSameAs(relayData);                    
                 };
 
+            bool authenticationRequestXmlCreatedCalled = false;
+            options.Notifications.AuthenticationRequestXmlCreated = (ar, xd, bt) =>
+            {
+                authenticationRequestXmlCreatedCalled = true;
+                ar.Should().BeSameAs(saml2AuthenticationRequest);
+                bt.Should().Be(Saml2BindingType.HttpRedirect);
+            };
+
             SignInCommand.Run(idp.EntityId, null, request, options, relayData)
                 .Should().BeSameAs(notifiedCommandResult);
 
-            authnRequestCreatedCalled.Should().BeTrue("the AuthenticationRequestCreated notification should have been called");
+            saml2AuthenticationRequest.Should().NotBeNull("the AuthenticationRequestCreated notification should have been called");
             selectedIdpCalled.Should().BeTrue("the SelectIdentityProvider notification should have been called.");
+            authenticationRequestXmlCreatedCalled.Should().BeTrue("the AuthenticationedRequestXmlCreated should have been called.");
         }
 
         [TestMethod]
@@ -448,6 +456,54 @@ namespace Sustainsys.Saml2.Tests.WebSso
 
             actual.SetCookieName.Should().StartWith(StoredRequestState.CookieNameBase);
             actual.SetCookieSecureFlag.Should().BeTrue();
+        }
+
+        [TestMethod]
+        public void SignInCommand_Run_SetIsPassiveFromQueryString()
+        {
+            var options = StubFactory.CreateOptions();
+            options.SPOptions.DiscoveryServiceUrl = null;
+
+            bool? isPassiveValue = null;
+            bool? forceAuthnValue = null;
+
+            options.Notifications.AuthenticationRequestCreated = (authnr, idp, relay) => 
+            {
+                isPassiveValue = authnr.IsPassive;
+                forceAuthnValue = authnr.ForceAuthentication;
+            };
+
+            var request = new HttpRequestData("GET",
+                new Uri("http://sp.example.com/Saml2/SignIn?IsPassive=true"));
+
+            SignInCommand.Run(null, null, request, options, null);
+
+            isPassiveValue.Should().BeTrue();
+            forceAuthnValue.Should().BeFalse();
+        }
+
+        [TestMethod]
+        public void SignInCommand_Run_SetForceAuthnFromQueryString()
+        {
+            var options = StubFactory.CreateOptions();
+            options.SPOptions.DiscoveryServiceUrl = null;
+
+            bool? isPassiveValue = null;
+            bool? forceAuthnValue = null;
+
+            options.Notifications.AuthenticationRequestCreated = (authnr, idp, relay) =>
+            {
+                isPassiveValue = authnr.IsPassive;
+                forceAuthnValue = authnr.ForceAuthentication;
+            };
+
+            var request = new HttpRequestData("GET",
+                new Uri("http://sp.example.com/Saml2/SignIn?ForceAuthn=true"));
+
+            SignInCommand.Run(null, null, request, options, null);
+
+            isPassiveValue.Should().BeFalse();
+            forceAuthnValue.Should().BeTrue();
         }
     }
 }
